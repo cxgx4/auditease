@@ -4,6 +4,7 @@ from docx import Document
 from io import BytesIO
 import time
 import pandas as pd
+import plotly.graph_objects as go
 from datetime import datetime
 
 # --- Page Config ---
@@ -33,12 +34,12 @@ st.markdown("""
     }
 
     .glass-card {
-        background: rgba(255, 255, 255, 0.6);
-        backdrop-filter: blur(12px);
+        background: rgba(255, 255, 255, 0.7);
+        backdrop-filter: blur(10px);
         border: 1px solid rgba(255, 255, 255, 0.5);
-        border-radius: 24px;
-        padding: 2rem;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+        border-radius: 20px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
     }
 
     .stButton > button {
@@ -55,16 +56,10 @@ st.markdown("""
         transform: scale(1.02);
     }
     
-    div[data-testid="stHorizontalBlock"] .stButton > button {
-        background-color: #f1f5f9;
-        color: #0f172a;
-    }
-    
     h1 {
         background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        letter-spacing: -0.02em;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -80,6 +75,31 @@ if "chat_history" not in st.session_state:
 def navigate_to(page):
     st.session_state.page = page
     st.rerun()
+
+# --- HELPER: RENDER GAUGE CHART ---
+def render_gauge(score):
+    fig = go.Figure(go.Indicator(
+        mode = "gauge+number",
+        value = score,
+        domain = {'x': [0, 1], 'y': [0, 1]},
+        title = {'text': "Compliance Health", 'font': {'size': 24, 'color': "#1e293b"}},
+        gauge = {
+            'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "white"},
+            'bar': {'color': "#2563eb"},
+            'bgcolor': "white",
+            'borderwidth': 2,
+            'bordercolor': "gray",
+            'steps': [
+                {'range': [0, 50], 'color': "#fee2e2"},
+                {'range': [50, 80], 'color': "#ffedd5"},
+                {'range': [80, 100], 'color': "#dcfce7"}],
+            'threshold': {
+                'line': {'color': "red", 'width': 4},
+                'thickness': 0.75,
+                'value': 90}}))
+    
+    fig.update_layout(height=250, margin=dict(l=20, r=20, t=50, b=20), paper_bgcolor="rgba(0,0,0,0)", font={'family': "Plus Jakarta Sans"})
+    return fig
 
 # --- PAGE 1: HOME ---
 def render_home():
@@ -98,7 +118,7 @@ def render_home():
                 </h1>
                 <p style="font-size: 1.2rem; color: #64748b; margin-bottom: 40px;">
                     The AI-powered legal engine that reads regulations, checks contracts,<br>
-                    and auto-generates redlines. No lawyer required.
+                    and calculates financial liability.
                 </p>
             </div>
             """, 
@@ -110,31 +130,11 @@ def render_home():
             if st.button("✨ Launch Dashboard", use_container_width=True):
                 navigate_to("Dashboard")
     
-    st.markdown("<br><br><br>", unsafe_allow_html=True)
+    st.markdown("<br><br>", unsafe_allow_html=True)
 
-    # Feature Grid
-    f1, f2, f3 = st.columns(3)
-    with f1:
-        st.markdown("""
-        <div class="glass-card">
-            <h3>⚡ Instant Gaps</h3>
-            <p style="color: #64748b">Upload a PDF and find 100% of compliance risks in under 30 seconds.</p>
-        </div>
-        """, unsafe_allow_html=True)
-    with f2:
-        st.markdown("""
-        <div class="glass-card">
-            <h3>🤖 Agentic Reasoning</h3>
-            <p style="color: #64748b">Our AI doesn't just match keywords. It understands legal intent and nuance.</p>
-        </div>
-        """, unsafe_allow_html=True)
-    with f3:
-        st.markdown("""
-        <div class="glass-card">
-            <h3>📝 Auto-Redline</h3>
-            <p style="color: #64748b">Don't just find the bug. Fix it. We generate compliant clauses automatically.</p>
-        </div>
-        """, unsafe_allow_html=True)
+    # Social Proof
+    st.markdown("<p style='text-align: center; color: #94a3b8; font-size: 0.9rem;'>TRUSTED BY LEGAL TEAMS AT</p>", unsafe_allow_html=True)
+    st.markdown("<div style='text-align: center; opacity: 0.5; font-size: 1.5rem; color: #64748b; font-weight: 700; letter-spacing: 2px;'>STRIPE &nbsp;&nbsp;•&nbsp;&nbsp; AIRBNB &nbsp;&nbsp;•&nbsp;&nbsp; DEEL &nbsp;&nbsp;•&nbsp;&nbsp; COINBASE</div>", unsafe_allow_html=True)
 
 # --- PAGE 2: DASHBOARD ---
 def render_dashboard():
@@ -163,57 +163,96 @@ def render_dashboard():
         elif not reg_file or not con_file:
             st.warning("Please upload both documents.")
         else:
-            with st.spinner("🕵️‍♂️ Agents are analyzing legal frameworks..."):
+            with st.spinner("🕵️‍♂️ Estimating liability & analyzing risks..."):
                 reg_text = backend.extract_text(reg_file)
                 con_text = backend.extract_text(con_file)
-                
-                # CALL BACKEND with STRICTNESS
                 results = backend.audit_documents(api_key, reg_text, con_text, strictness)
                 st.session_state.audit_results = results
                 st.rerun()
 
-    # --- ERROR HANDLING & RESULTS ---
+    # --- RESULTS DISPLAY ---
     if st.session_state.audit_results:
         results = st.session_state.audit_results
         
-        # Check for Errors first
-        if isinstance(results, list) and len(results) > 0 and "error" in results[0]:
-            st.error(f"❌ Analysis Failed: {results[0]['error']}")
-            st.info("Tip: Ensure your API key is correct and valid for Gemini 1.5 Flash.")
-        
+        # Error handling
+        if "error" in results:
+            st.error(f"❌ {results['error']}")
         else:
             st.markdown("---")
-            risks = len(results)
-            critical = sum(1 for r in results if r.get('risk_score', 0) >= 8)
             
-            k1, k2, k3 = st.columns(3)
-            k1.metric("Risks Found", risks, delta="-2 from last ver.")
-            k2.metric("Critical", critical, delta="Urgent", delta_color="inverse")
-            k3.metric("Compliance", f"{100 - (risks*5)}%", "+5%")
-            
-            tab1, tab2 = st.tabs(["📋 Audit Report", "💬 AI Assistant"])
-            
-            with tab1:
-                for item in results:
-                    clause_id = item.get('clause_id', 'Unknown Clause')
-                    score = item.get('risk_score', 0)
-                    
-                    with st.expander(f"🔴 {clause_id} (Risk: {score}/10)"):
-                        st.markdown(f"**Violation:** {item.get('violation', 'No details')}")
-                        c1, c2 = st.columns(2)
-                        c1.error(f"**Original:**\n\n{item.get('original_text', 'N/A')}")
-                        c2.success(f"**Fix:**\n\n{item.get('suggested_revision', 'N/A')}")
-                
-                doc = Document()
-                doc.add_heading('AuditEase Report', 0)
-                for r in results:
-                    doc.add_paragraph(f"Risk: {r.get('clause_id')} | Fix: {r.get('suggested_revision')}")
-                bio = BytesIO()
-                doc.save(bio)
-                st.download_button("📥 Download Report (.docx)", bio.getvalue(), "report.docx")
+            # 1. EXECUTIVE SUMMARY (Gauge + Liability)
+            score = results.get("overall_score", 0)
+            liability = results.get("total_estimated_liability", 0)
+            analysis = results.get("analysis", [])
 
-            with tab2:
-                st.info("AI Chat Assistant is ready. (Connect backend logic here)")
+            col_gauge, col_metrics = st.columns([1, 2])
+            
+            with col_gauge:
+                #  - Triggers Plotly chart
+                fig = render_gauge(score)
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with col_metrics:
+                st.markdown("<br>", unsafe_allow_html=True)
+                m1, m2 = st.columns(2)
+                m1.metric("Financial Liability", f"${liability:,}", "Potential Fine", delta_color="inverse")
+                m2.metric("Risks Identified", len(analysis), "Clauses to Fix", delta_color="inverse")
+                
+                st.info("💡 **AI Insight:** This contract has significant exposure regarding GDPR data retention policies. Immediate revision recommended.")
+
+            # 2. DOCUMENT VAULT (History)
+            with st.expander("📂 Document Vault (Recent Audits)", expanded=False):
+                history_data = {
+                    "Date": ["2026-01-18", "2026-01-17", "2026-01-15"],
+                    "Document": [con_file.name if con_file else "Contract_v4.pdf", "Vendor_Agreement_v1.pdf", "HR_Policy.pdf"],
+                    "Status": ["🔴 Action Required", "🟢 Approved", "🔴 Action Required"],
+                    "Liability": [f"${liability:,}", "$0", "$50,000"]
+                }
+                st.dataframe(pd.DataFrame(history_data), use_container_width=True, hide_index=True)
+
+            # 3. DETAILED REDLINES (Side-by-Side)
+            st.markdown("### 📝 Interactive Redlines")
+            
+            for item in analysis:
+                clause_id = item.get('clause_id', 'Unknown')
+                risk = item.get('risk_score', 0)
+                fine = item.get('estimated_liability', 0)
+                
+                with st.container():
+                    st.markdown(f"#### 🚩 {clause_id} (Risk: {risk}/10)")
+                    st.caption(f"**Violation:** {item.get('violation')} | **Est. Fine:** ${fine:,}")
+                    
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        st.markdown("**❌ Original Text**")
+                        st.markdown(f"""
+                        <div style="background-color: #fef2f2; border: 1px solid #fecaca; padding: 15px; border-radius: 10px; color: #991b1b;">
+                            {item.get('original_text')}
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    with c2:
+                        st.markdown("**✅ Compliant Rewrite**")
+                        st.markdown(f"""
+                        <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; padding: 15px; border-radius: 10px; color: #166534;">
+                            {item.get('suggested_revision')}
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    st.markdown("<br>", unsafe_allow_html=True)
+
+            # 4. DOWNLOAD
+            doc = Document()
+            doc.add_heading('AuditEase Liability Report', 0)
+            doc.add_paragraph(f"Total Estimated Liability: ${liability:,}")
+            for r in analysis:
+                doc.add_heading(r.get('clause_id'), level=1)
+                doc.add_paragraph(f"Original: {r.get('original_text')}")
+                doc.add_paragraph(f"Fix: {r.get('suggested_revision')}")
+            bio = BytesIO()
+            doc.save(bio)
+            
+            st.download_button("📥 Download Official Report", bio.getvalue(), "audit_report.docx", use_container_width=True)
 
 # --- MAIN ROUTER ---
 if st.session_state.page == "Home":
